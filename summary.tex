@@ -1,0 +1,121 @@
+
+\thispagestyle{empty}
+\subsection*{The general context}
+
+As mathematical proof complexity continues to rise, the need for automated proof
+checking becomes more and more pressing. Furthermore, more and more critical
+systems integrate non-trivial software, leading a need to formally prove the
+absence of bugs in that software. This has led to the development of many proof
+assistants. Since these software have been developed by different teams, using
+different theories, and often with subtly different goal in mind, translating a
+proof from one assistant to the other must be done manually, and is often non
+trivial work.
+
+This is a problem on two levels. First, since proof assistants are developed in
+standard programming languages, their correctness has not been verified. This
+means we need to trust the software when it tells us a proof is correct. While
+most of them only have a simple \emph{core} that need to be trusted, and not the
+full codebase, it would still be a further guarantee if one could translate
+proof from one assistant to the other, and check its correctness in all proof
+assistants, thus reducing the risk that a bug in one of them would result in an
+undetected false proof. And second, manually proving basic math results in all
+proof assistants is a bit of a waste, when one could ideally just take the
+proofs from other proof assistants, instead of having a fragmented ecosystem, as
+is the situation right now.
+
+This has led to the development of what are called \emph{logical framework}.
+These are systems that aim to be general enough so that the type systems of most
+proof assistants can be encoded into them. They thus provide a common ground to
+manipulate proofs from many different systems, and write translation from a
+system to any other, and eventually then export the proof to the other system.
+Even if it was not developed with this aim,
+\emph{Isabelle}\cite{nipkow_isabellehol_2002} is a kind of logical framework.
+Another such system is \emph{NuPrl}\cite{allen_nuprl_2000}, and more recent
+efforts include \emph{OpenTheory}\cite{hurd_opentheory_2009}.
+
+The one that interest us here is \emph{Dedukti}\cite{assaf_dedukti_2016}. It is
+a logical framework based on the $\lambda\Pi$-modulo calculus (also written $\lp$), with
+a growing support for import and export from/to many proof assistants, including
+\emph{Coq}, \emph{Matita} and \emph{OpenTheory}. Its new version is called
+\emph{LambdaPi}, as a reference to the underlying logic, and since this is the
+version I used in this internship, this is how I will refer to it in this paper.
+
+\subsection*{The research problem}
+
+What will interest us here is the embedding of a specific kind a type theory in
+\emph{LambdaPi}. But to understand the challenge of our embedding, we need to
+explain the difference between a \emph{deep} embedding and a \emph{shallow}
+embedding. When encoding a type theory or a logic in another type theory, there
+are two approaches one can take.  The first one, which always work, is to create
+an inductive type describing the syntax of terms, types and typing derivation of
+the initial logic. On can (almost) always do that, and it result in what is
+called a \emph{deep} embedding, since the logic is embedded into terms of a type
+inside the target logic.  The advantage of this approach is that it is very
+easy, since all one need is the description of the source logic. But it results
+in something unwieldy to manipulate and work with, and also needs a lot of
+uninteresting work to get right (handling $\alpha$-equivalence\dots).
+
+The other approach, that one can do when the two logic are close enough or when
+the target logic is more powerful than the starting one, is to find an injection
+of the terms of the initial logic into those of the target logic such that the
+injection of a type is inhabited in the target logic if and only if the initial
+type is inhabited in the source logic.  The big interest of this approach is
+that one can use all the tooling of the target logic to work on the embedded
+term. In the case of embedding in a proof assistant, that means automatic
+handling of context and variable binding, $\alpha$-equivalence, type inference,
+eventually tactics to create terms\dots
+
+So the problem here was to find a shallow embedding of \emph{Extensional Type
+Theory} (ETT) into LambdaPi. I will go into more detail about the property of
+ETT in the relevant section (section \ref{ETT}, page \pageref{ETT}), but since
+it is much more expressive in a certain sense than LambdaPi, a naïve shallow
+embedding is impossible.
+
+\thispagestyle{empty}
+\subsection*{Your contribution}
+
+Thankfully, there is a paper by Winterhalter, Sozeau and
+Tabareau\cite{winterhalter_eliminating_2019} that describes a way to embed is a
+shallow-ish way ETT in traditional Martin-Löf Type Theory (MLTT). The latter has a
+pretty standard shallow embedding in LambdaPi, so combining those two embeddings
+give an interesting embedding of ETT in LambdaPi.
+
+What I did was first implement the standard embedding of MLTT in LambdaPi
+(section \ref{MLTT}), then formalise ETT as a deep embedding in LambdaPi
+(section \ref{ETT-deep}), and finally implement a function that takes a
+derivation of an ETT term a yields a translation of that term in MLTT following
+the algorithm given by the previously mentioned paper (section
+\ref{translation}).
+
+\subsection*{Arguments supporting its validity}
+
+One big advantage of my implementation is that it is fully typed using the whole
+power of the type system of LambdaPi. So it is pretty much correct by typing. On
+the other hand, LambdaPi does not check for confluence or terminaison of the
+terms, but after testing it on a few examples (section \ref{results}), it seems
+correct.
+
+Furthermore, using the expressiveness of LambdaPi actually gives smaller and
+more readable proofs than the Coq implementation of the paper, despite the
+absence of tactics in LambdaPi.
+
+On the other hand, it suffers from the inefficiency of LambdaPi, which is a very
+powerful unification engine but using that power for computation result in
+something slow that consumes a lot of memory, failing even on relatively simple
+terms. Also translating directly to the shallow embedding means the created term
+cannot be rewritten to simplify it. Finally, due to the way it is done, there is
+no way to translate a term without also executing it. These last two problems
+could be fixed by introducing an intermediary layer to the translation, but the
+first one is pretty much unavoidable for a translation written directly in
+LambdaPi.
+
+\subsection*{Summary and future work}
+
+Once the last remaining problems are fixed, such an embedding could be used to
+embed \emph{NuPrl} proofs in LambdaPi, since it uses extensional type theory as
+its foundation.  Furthermore, it could be used to encode any system with a
+stronger equality than MLTT, by going through ETT first. One such system that is
+of interest is \emph{Cubical Type Theory}.  Finally, this algorithm could be
+easily expanded to translate from \emph{Homotopy Type
+System}\cite{voevodsky_simple_2013} to \emph{Two-Level Type
+Systems}\cite{annenkov_two-level_2019}.

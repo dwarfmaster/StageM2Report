@@ -1,4 +1,4 @@
-\documentclass[12pt]{article}
+\documentclass[11pt]{article}
 
 \usepackage{longtable}
 \usepackage[utf8]{inputenc}
@@ -12,6 +12,12 @@
 \usepackage{amssymb}
 \usepackage{cmll}
 \usepackage{xcolor}
+\usepackage{ebproof}
+\usepackage{listings}
+
+\input{lp-listing}
+
+\newcommand{\lp}{\ensuremath{\lambda\Pi/\equiv}}
 
 \title{Embedding extensional type theory in LambdaPi}
 \author{Luc Chabassier}
@@ -20,7 +26,23 @@
 \frenchspacing
 
 \maketitle
+\tableofcontents
 
+\include{summary}
+
+\section{LambdaPi and Martin-Löf Type Theory}\label{MLTT}
+\input{lambdapi}
+
+\section{Extensional Type Theory}\label{ETT}
+\input{ett}
+
+\section{The translation}\label{translation}
+
+\section{Results and improvements}\label{results}
+
+\section{Conclusion}\label{conclusion}
+
+\section*{Bibliography}
 \bibliographystyle{acm}
 \bibliography{bibliography}
 

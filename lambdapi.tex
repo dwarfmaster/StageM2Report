@@ -123,12 +123,181 @@ more primitive types than LambdaPi.
 
 \subsection{Martin-Löf Type Theory}
 
+Since LambdaPi is a logical framework, we first need to encode a specific logic
+in it to work with. The logic we will work with is \emph{Martin-Löf Type Theory
+with a hierarchy of non-cumulative universe}, which we will abbreviate
+\emph{MLTT}. It is one of the most common basis for type systems with dependent
+types. For example, the \emph{Calculus of Construction} is based on this
+framework. The definition is pretty similar to the lambda-pi calculus, with
+built-in polymorphism and more basic types, since there is no \emph{modulo} part
+that can be used to add new parts. This type theory is often also called
+\emph{Intentional Type Theory}, by opposition to \emph{Extensional Type Theory},
+see section \ref{mltt-eq} for more details.
+
 \subsubsection{Definition}
 
-\subsubsection{Two levels of equality}
+The syntax is that of the usual $\lambda$-calculus, with dependent sum, dependent
+product, equality types, and a hierarchy of universe~:
 
-\subsubsection{Uniqueness of identity proofs}
+\[\begin{array}{rcll}
+    t, u, w, p, P, T, U, \dots & := & \lambda(x : T), t & \\
+                               & |  & t\ u & \\
+                               & |  & x & \\
+                               & |  & \Pi(x : T), U & \\
+                               & |  & \Sigma(x : T), U & \\
+                               & |  & \pi_{1}(t) & \\
+                               & |  & \pi_{2}(t) & \\
+                               & |  & (t,u) & \\
+                               & |  & t =_{T} u & \\
+                               & |  & \text{refl}_{T}(t) & \\
+                               & |  & J\ T\ t\ P\ w\ u\ p & \\
+                               & |  & U_{s} & \text{for } s\in\mathbb{N} \\
+\end{array}\]
 
-\subsubsection{Functional extensionality}
+Once again, the typing rules are pretty straightforward, and we will only
+discuss those of particular interest. First let's see how to deal with
+polymorphism by looking at the abstraction and product forming rules~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\Gamma\vdash A : U_s}
+  \hypo{\Gamma, x : A\vdash t : B}
+  \infer2[Abs]{\Gamma\vdash \lambda(x : A), t : \Pi(x : A), B}
+\end{prooftree}\quad\begin{prooftree}
+  \hypo{\Gamma\vdash A : U_s}
+  \hypo{\Gamma, x:A\vdash B : U_{s'}}
+  \infer2[Prod]{\Gamma\vdash\Pi(x:A),B : U_{s\vee s'}}
+\end{prooftree}\end{center}
+
+So here we see that \emph{types} are elements of some $U_{s}$. So can we
+quantify over types~? Well the answer is yes, due to the way universes are
+typed~:
+
+\begin{center}\begin{prooftree}
+  \infer0{\Gamma\vdash U_s : U_{s+1}}
+\end{prooftree}\end{center}
+
+So while it is impossible to quantify over all types, it is possible to quantify
+over all types of a certain level.
+
+\subsubsection{Equality}\label{mltt-eq}
+
+Equality deserves a specific discussion. Like with the lambda-pi calculus, there
+is a notion of \emph{convertibility} $\Gamma\vdash t \equiv u$, which is used through the
+conversion rule, and a notion of equality $\Gamma\vdash p : t =_{T} u$. In order to
+distinguish the two, the former is called \emph{definitional equality} and the
+latter \emph{propositional equality}.
+
+Propositional equality is introduced through the following rule~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\Gamma\vdash t : T}
+  \infer1{\Gamma\vdash\text{refl}_T(t) : t =_T t}
+\end{prooftree}\end{center}
+
+Propositional equality can be seen as an internalisation of definitional
+equality in the type theory. Indeed, if $\Gamma\vdash t \equiv u$, then, by congruence,
+$\Gamma\vdash t =_{T} t \equiv t =_{T} u$, and thus, by conversion,
+$\Gamma\vdash\text{refl}_{T}(t) : t =_{T} u$. But it can be manipulated as a proposition,
+including abstracting over it, while this is impossible with definitional
+equality.
+
+Using propositional equality needs a specific term, and that is $J$~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\Gamma\vdash t : T}
+  \hypo{\Gamma, x : T, p : t =_T x\vdash P : U_s}
+  \infer[no rule]2{\Gamma\vdash w : P[x\rightarrow t, p\rightarrow \text{refl}_T(t)]}
+  \hypo{\Gamma\vdash u : T}
+  \infer[no rule]1{\Gamma\vdash p : t =_T u}
+  \infer2{\Gamma\vdash J\ T\ t\ P\ w\ u\ p : P[x\rightarrow u, p\rightarrow p]}
+\end{prooftree}\end{center}
+
+One way to look at it is that $J$ allows to treat the propositional equality as
+an inductive type with only one constructor. This interpretation also allows us
+to guess the computation rule for $J$~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\Gamma\vdash t : T}
+  \hypo{\Gamma, x : T, p : t =_T x\vdash P : U_s}
+  \hypo{\Gamma\vdash w : P[x\rightarrow t, p\rightarrow \text{refl}_T(t)]}
+  \infer3{\Gamma\vdash J\ T\ t\ P\ w\ t\ \text{refl}_T(t) \equiv w}
+\end{prooftree}\end{center}
+
+\subsubsection{Transport}\label{transport}
+
+There is a specific usage of equality that will be very relevant for this
+project. Recall that if we have $\Gamma\vdash t : T$ and $\Gamma\vdash T \equiv U$, then we have
+$\Gamma\vdash t : U$ thanks to the conversion rule.  The question is, can we do something
+similar with propositional equality~? Let's assume $\Gamma\vdash t : T$ and
+$\Gamma\vdash p : T =_{U_{s}} U$. Can we have $\Gamma\vdash t : U$~? The answer is no, not in the
+general case.  But we can create a term in $U$ from $t$ and $p$. That is, we
+have~:
+
+\[\Gamma\vdash J\ U_{s}\ T\ (\lambda(U : U_{s}), \lambda(p : T =_{U_{s}} U), U)\ t\ U\ p : U\]
+
+Such a term is called the \emph{transport} of $t$ along $p$, and we will write
+it $\text{transport}(p,t)$ from now on. Thanks to the computation rule for $J$,
+we have that~:
+
+\[\Gamma\vdash\text{transport}(\text{refl}_{U_{s}}(T),t) \equiv t\]
+
+\subsubsection{Uniqueness of identity proofs}\label{uip}
+
+In this section and the following one, we will describe common axioms that are
+often used with MLTT.
+
+Let's have another look at equality. Given $\Gamma\vdash t : T$ ans $\Gamma\vdash u : T$, there may
+be multiple propositional equalities between $t$ and $u$. One may then wonder,
+are they equal~? After all, when we eliminate them, we get the reflexivity. And
+if they are, can there be multiple proof of equality between them~? More
+generally, we can consider this whole tower of equalities, and equalities
+between equalities, going on and on. Study of the structure and interaction
+between all those equalities is what started the whole project of \emph{Homotopy
+Type Theory}, which is well beyond this project. Another approach, that is still
+consistent with MLTT, is to collapse everything by adding an axiom that says
+that any two equalities are equal. This axiom is called \emph{Uniqueness of
+identity proofs}, or \emph{UIP}~:
+
+\begin{center}\begin{prooftree}
+    \hypo{\Gamma\vdash t : T} \hypo{\Gamma\vdash u : T}
+    \hypo{\Gamma\vdash p_1 : t =_T u} \hypo{\Gamma\vdash p_2 : t=_T u}
+    \infer4{\Gamma\vdash \text{uip}(t,u,p_1,p_2) : p_1 =_{t=_T u} p_2}
+\end{prooftree}\end{center}
+
+This axiom is equivalent to another one, called the axiom $K$. It claims that
+any equality is the reflexivity~:
+
+\begin{center}\begin{prooftree}
+    \hypo{\Gamma\vdash t : T} \hypo{\Gamma\vdash p : t =_T t}
+    \infer2{\Gamma\vdash K(t,p) : p =_{t =_T t} \text{refl}_T(t)}
+\end{prooftree}\end{center}
+
+$K$ can be easily deducted from UIP, by applying the latter to $p$ and
+$\text{refl}_{T}(t)$. For the other direction, one need to destruct $p_{1}$ and
+then apply $K$ to $p_{2}$.
+
+The main interest of using $K$ is that it can be given some computational
+content, meaning one can define a computational rule for it~:
+
+\begin{center}\begin{prooftree}
+    \hypo{\Gamma\vdash t : T}
+    \infer1{\Gamma\vdash K(t,\text{refl}_T(t)) \equiv \text{refl}_{t =_T t}(\text{refl}_T(t))}
+\end{prooftree}\end{center}
+
+\subsubsection{Functional extensionality}\label{funext}
+
+Another axiom that is very useful is that of functional extensionality. It comes
+from the fact that since functions have little structure to be exploited,
+proving equality between functions beyond syntactic equality is often
+impossible. Intuitively, two functions should be equal if they are pointwise
+equal, as this is what set theory has gotten us used to. Well functional
+extensionality is an axiom that says exactly that~:
+
+\begin{center}\begin{prooftree}
+    \hypo{\Gamma\vdash f : \Pi(x : A), B}
+    \hypo{\Gamma\vdash g : \Pi(x : A), B}
+    \hypo{\Gamma, x:A \vdash p : f\ x =_{B\ x} g\ x}
+    \infer3{\Gamma\vdash f =_{\Pi(x : A), B} g}
+\end{prooftree}\end{center}
 
 \subsection{Embedding MLTT in $\lp$}

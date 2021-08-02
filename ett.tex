@@ -1,0 +1,213 @@
+
+We will now have a deeper look at the type theory that we will be looking to
+embed, starting from its definition (section \ref{ETT-def}), all the way to the
+challenges of a \emph{shallow} embedding in LambdaPi (section
+\ref{ETT-shallow}).
+
+\subsection{Definition}\label{ETT-def}
+
+\emph{Extensional Type Theory} (ETT) is based on MLTT. The syntax is exactly
+the same, and all the typing rules of MLTT are valid in ETT. So for the basis
+of the system we refer you to section \ref{MLTT}. The part where it differs is
+on how the equality is treated. In section \ref{mltt-eq}, we saw how in MLTT
+there are two levels of equality, the \emph{definitional} one and the
+\emph{propositional} one, with the fact that the propositional equality is
+coarser than the definitional equality. This is really confusing to people
+coming from a mathematical background, where there is only one equality, which
+has both the property of the propositional equality that it can be manipulated
+in proofs, and the property of the definitional equality that if two objects
+are proved equals, they can be used interchangeably in any context.
+
+A way to achieve such an equality in MLTT would be to add a reduction rule that
+asserts that any proof of a propositional equality between two terms results in
+a definitional equality between those terms~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\Gamma\vdash e : t =_T u}
+  \infer1{\Gamma\vdash t \equiv u}
+\end{prooftree}\end{center}
+
+This is called the \emph{reflection} rule, and ETT is exactly MLTT plus this
+deduction rule. While this makes the equality much more intuitive and natural
+to work with, it has one major drawback~: when typing checking a term, one may
+need to infer a proof of equality between two terms. This problem is in general
+undecidable, and that makes type checking for ETT undecidable. This is the
+reason that ETT is almost never used at the backbone of proof assistants.
+
+Yet one could imagine a proof assistant where the type-checking phase is itself
+interactive and prompt the user for proofs of equalities, which could allow a
+proof assistant to use ETT.
+
+\subsection{Deep embedding}\label{ETT-deep}
+
+The deep embedding of ETT we realized in LambdaPi is a pretty standard, used
+DeBrujin indices. The terms are defined as an inductive type~:
+
+\begin{lstlisting}
+inductive Term : TYPE :=
+| var : DBId → Term
+| tabs
+  : Term // Type of the argument
+  → Term // Type of result
+  → Term // Body of the abstraction
+  → Term
+| tapp
+  : Term // Type of the argument of the function
+  → Term // Type of the result
+  → Term // Function
+  → Term // Argument
+  → Term
+| tfun
+  : Term // Type of the argument
+  → Term // Type of the result
+  → Term
+| tsort : Sort → Term
+...;
+\end{lstlisting}
+
+Where \texttt{DBId} is the type of DeBrujin indices. We also need the usual
+operations on terms relative to DeBrujin indices, the shifting and the
+substitution, defined by induction on the term~:
+
+\begin{lstlisting}
+// Increases all free variable by one, assuming all the variable
+// strictly lower than the first argument to be bound
+symbol shift : DBId → Term → Term;
+symbol Shift : Term → Term := shift db0;
+symbol Shift1 : Term → Term := shift db1;
+// Substitution (and shift down everything above the
+// substituted index)
+symbol subst : DBId → Term → Term → Term;
+symbol apply1 (t u : Term) : Term := subst db0 u t;
+\end{lstlisting}
+
+Using all those definition, we can define by mutual induction a type
+\texttt{der\_context} that asserts a context is well-formed, a type
+\texttt{der} that asserts a term is well-typed, and a type \texttt{der\_eq}
+that asserts two terms are definitionally equal, all under a context
+\texttt{Context} that is an inductivaly defined list of types~:
+
+\begin{lstlisting}
+inductive der_context : Context → TYPE :=
+| der_context_empty : der_context Empty
+| der_context_push : Π(C : Context), Π(s : Sort), Π(A : Term),
+  der C A (tsort s) (snext s) → der_context C
+  → der_context (Push A s C)
+inductive der : Context → Term → Term → Sort → TYPE :=
+| der_sort : Π(C : Context), Π(s : Sort),
+  der C (tsort s) (tsort (snext s)) (snext (snext s))
+| der_var :
+  Π(C : Context), Π(id : DBId),
+  der C (var id) (ShiftN id (get C id)) (getS C id)
+| der_type_conv :
+  Π(C : Context), Π(u A B : Term), Π(s : Sort),
+  der C u A s → der_eq C (snext s) (tsort s) A B → der C u B s
+| der_abs :
+  Π(C : Context), Π(s s' : Sort), Π(A t B : Term),
+  der C A (tsort s) (snext s)
+  → der (Push A s C) B (tsort s') (snext s')
+  → der (Push A s C) t B s'
+  → der C (tabs A B t) (tfun A B) (smax s s')
+...
+with der_eq : Context → Sort → Term → Term → Term → TYPE :=
+| der_eq_beta :
+  Π(C : Context), Π(s s' : Sort), Π(u A t B : Term),
+  der C A (tsort s) (snext s)
+  → der (Push A s C) B (tsort s') (snext s')
+  → der (Push A s C) t B s' → der C u A s
+  → der_eq C s' (apply1 B u) (tapp A B (tabs A B t) u) (apply1 t u)
+| der_eq_eta :
+  Π(C : Context), Π(s s' : Sort), Π(A f B : Term),
+  der C A (tsort s) (snext s)
+  → der (Push A s C) B (tsort s') (snext s')
+  → der C f (tfun A B) (smax s s')
+  → der_eq C (smax s s') (tfun A B)
+           (tabs A B (tapp (Shift A) (Shift1 B) (Shift f) (var db0)))
+           f
+| der_eq_π1 :
+  Π(C : Context), Π(s s' : Sort), Π(u A v B : Term),
+  der C A (tsort s) (snext s) → der C u A s
+  → der (Push A s C) B (tsort s') (snext s') → der C v (apply1 B u) s'
+  → der_eq C s A (π1 A B (tpair A B u v)) u
+...
+;
+\end{lstlisting}
+
+There is one aspect that differs from the usual formalisation of MLTT. In the
+usual definitions, we require of proof that the context is well-formed when
+typing variables and universes~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\vdash\Gamma, x:A, \Delta}
+  \infer1[Var]{\Gamma, x:A, \Delta\vdash x : A}
+\end{prooftree}\qquad\begin{prooftree}
+  \hypo{\vdash\Gamma, x:A, \Delta}
+  \infer1[Univ]{\Gamma, x:A, \Delta\vdash U_s : U_{s+1}}
+\end{prooftree}\end{center}
+
+It makes sense to ask for it in theory, but in practice it results in an
+explosion of the size of the derivation, since proofs of correctness of context
+are repeated again and again, and since in the proof of the well-formation of
+the context, there is a proof that the type is well-typed, which itself will
+require in its proof proofs of the correctness of the context, the size of the
+derivation grow much more faster than linearly in the size of the context. This
+size explosion resulted in noticable slowdown and memory usage during their
+usage definition, and thus needed to be addressed.
+
+One way to solve it is to notice that having a proof of $\Gamma\vdash t : T$
+with the proof of the context when using variables is exactly equivalent to
+have the same proof without all the context proof, plus one proof of
+$\vdash\Gamma$. One way to show it is that every rule that add to the context
+contains enough information to deduce a proof a correctness of the extended
+context. That is why the above formalisation have simples \texttt{der\_var} and
+\texttt{der\_sort}, but all the functions that use a proof of typing also take
+a proof of correctness of the context as argument.
+
+\subsection{Properties}\label{ETT-prop}
+
+From my description of ETT above, one could get the impression that ETT is
+simply MLTT with an easier way of using equality. But actually this new way of
+using equality interacts in a subtle manner with many other parts of the type
+system. One particularly striking difference is that the UIP and funext axioms
+(discussed respectively in sections \ref{uip} and \ref{funext}) are actually
+theorems in ETT.
+
+Functional extensionality is a consequence of the interaction of the reflection
+rule with the $\eta$-expansion and the fact that definitional equality is a
+congruence. Let's recall them~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\Gamma\vdash f : \Pi(x : A), B}
+  \infer1[$\eta$-exp]{\Gamma\vdash f \equiv \lambda(x:A), f\ x}
+\end{prooftree}\quad\begin{prooftree}
+  \hypo{\Gamma\vdash A_1\equiv A_2}
+  \hypo{\Gamma,x:A_1\vdash t_1 \equiv t_2}
+  \infer2[$\lambda$-cong]{\Gamma\vdash \lambda(x : A_1), t_1 \equiv \lambda(x:A_2), t_2}
+\end{prooftree}\end{center}
+
+Now let's assume we have $\Gamma$, $A$, $B$, $f$, $g$ and $p$ such that
+$\Gamma\vdash f : \Pi(x:A), B$, $\Gamma\vdash g : \Pi(x:A), B$ and $\Gamma, x:A
+\vdash p : f\ x =_{B\ x} g\ x$. The proof goes as follows~:\begin{itemize}
+  \item From the reflexion rule and $p$, we deduce $\Gamma, x : A \vdash f\ x \equiv g\ x$
+  \item By congruence of the definitional equality, $\Gamma\vdash \lambda(x:A), f\ x \equiv \lambda(x:A), g\ x$
+  \item By $\eta$-expansion, we get $\Gamma\vdash f\equiv g$
+  \item And thus, by reflexivity, $\Gamma\vdash \text{refl}_{\Pi(x:A),B}(f) : f =_{\Pi(x:A),B} g$
+\end{itemize}
+
+So functional extensionality is simply an instance of reflexivity.
+
+UIP is a result of the interaction of the reflexion rule with $J$. More
+precisely, it allows us to write a predicate that wouldn't type without
+reflexion, and applying $J$ on it gives us what we want. The definition and
+typing rule for $J$ are given section \ref{mltt-eq}. The proof is actually
+easier for axiom $K$ (shown equivalent to UIP in the same section), so that is
+the one we will prove.
+
+Let's assume we have $\Gamma$, $t$, $T$, and $p$ such that $\Gamma\vdash t:T$,
+and $\Gamma\vdash p : t =_T t$. By reflexion, we have that $\Gamma\vdash
+\lambda(x:T),\lambda(q : t =_T x), q =_{x =_T x} \text{refl}_T(x) : U_s$ for
+some $s\in\mathbb{N}$. When $x \leftarrow t$ and $q \leftarrow
+\text{refl}_T(t)$, the previous type is inhabitated by $\text{refl}_{t=_T
+t}(\text{refl}_T(t))$. So by eliminating $p$ on the previous predicate, we have
+a term inhabitating $p =_{t =_T t} \text{refl}_T(x)$.
+

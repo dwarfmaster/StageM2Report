@@ -1,0 +1,16 @@
+
+\subsection{Idea}
+
+We can now consider the possibility of a shallow embedding of ETT in LambdaPi.
+Since we need to construct terms that behave like MLTT, we can start with the
+shallow embedding of MLTT described section \ref{mltt-shallow}. One could then
+hope to add clever enough reduction rule to this encoding to make the reflexion
+rule hold for its types. But this face a fundamental problem~: type checking is
+undecidable in ETT, while it is decidable in LambdaPi. So if we could have an
+embedding that is just the identity on term, we would have a decidable
+typechecking algorithm for ETT, which is impossible.
+
+\subsection{Organisation}
+
+\subsection{Properties}
+

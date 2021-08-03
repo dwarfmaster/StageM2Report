@@ -4,11 +4,62 @@
 We can now consider the possibility of a shallow embedding of ETT in LambdaPi.
 Since we need to construct terms that behave like MLTT, we can start with the
 shallow embedding of MLTT described section \ref{mltt-shallow}. One could then
-hope to add clever enough reduction rule to this encoding to make the reflexion
+hope to add clever enough reduction rule to this encoding to make the reflection
 rule hold for its types. But this face a fundamental problem~: type checking is
 undecidable in ETT, while it is decidable in LambdaPi. So if we could have an
 embedding that is just the identity on term, we would have a decidable
 typechecking algorithm for ETT, which is impossible.
+
+In order to work around this problem, we need a transformation on terms. But the
+risk with one such approach is to transform the term and types too much, so that
+they are unrecognisable after the transformation, reducing the practical
+interest of such an embedding. There is one such very famous transformation,
+that deals with the embedding of classical logic within intuitionistic logic,
+the double negation translation. It is another case of translation where the
+terms are the same between the source and the target language, the only
+difference being that the target language has one more deduction rule, the
+excluded middle. This translation replaces terms by terms that are equivalent in
+the source language, but can be typed without using the excluded middle.
+
+We want to find something similar between ETT and MLTT, a way to transform terms
+that preserves their semantic content within ETT but allows them to be typed
+only with MLTT rules, that is without the reflection rule. Thankfully such a
+translation has already been developed by Winterhalter, Sozeau and
+Tabareau\cite{winterhalter_eliminating_2019}.  Furthermore, the input is a
+well-typed term along with a typing derivation, since inferring such a
+derivation from the term in undecidable. Indeed, the translation is more a
+translation of ETT typing derivations to MLTT terms than a translation of terms
+to terms.
+
+In the double negation translation, the main idea was that while $\neg A \vee A$ is
+not provable intuitionistically, $\neg \neg (\neg A \vee A)$ is and is classically
+equivalent to the previous proposition. The translation is then an extension of
+that idea. Here the foundational idea is that we have a proof of the form~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\Xi_1}
+  \infer1{\Gamma\vdash a : A}
+  \hypo{\Xi_2}
+  \infer1{\Gamma\vdash p : A=_{U_s} B}
+  \infer1{\Gamma\vdash A \equiv B}
+  \infer2{\Gamma\vdash a : B}
+\end{prooftree}\end{center}
+
+While this is not typeable, we can use a transport (see section \ref{transport})
+to get something typeable~:
+
+\begin{center}\begin{prooftree}
+  \hypo{\Xi_1}
+  \infer1{\Gamma\vdash a : A}
+  \hypo{\Xi_2}
+  \infer1{\Gamma\vdash p : A =_{U_s} B}
+  \infer2{\Gamma\vdash p^*\ a : B}
+\end{prooftree}\end{center}
+
+The main idea is thus to go through the typing derivation, and remove usages of
+the reflection rule by adding transports in the term. Of course this is not so
+easy, because reflections can appear within a more complex congruence proof. So
+we need a more systematic approach to it.
 
 \subsection{Organisation}
 

@@ -1,8 +1,6 @@
 
 We will now have a deeper look at the type theory that we will be looking to
-embed, starting from its definition (section \ref{ETT-def}), all the way to the
-challenges of a \emph{shallow} embedding in LambdaPi (section
-\ref{ETT-shallow}).
+embed.
 
 \subsection{Definition}\label{ETT-def}
 
@@ -197,7 +195,7 @@ $\Gamma\vdash f : \Pi(x:A), B$, $\Gamma\vdash g : \Pi(x:A), B$ and $\Gamma, x:A
 So functional extensionality is simply an instance of reflexivity.
 
 UIP is a result of the interaction of the reflexion rule with $J$. More
-precisely, it allows us to write a predicate that wouldn't type without
+precisely, it allows us to write a predicate that would not type without
 reflexion, and applying $J$ on it gives us what we want. The definition and
 typing rule for $J$ are given section \ref{mltt-eq}. The proof is actually
 easier for axiom $K$ (shown equivalent to UIP in the same section), so that is

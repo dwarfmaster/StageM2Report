@@ -179,10 +179,6 @@ typed~:
 So while it is impossible to quantify over all types, it is possible to quantify
 over all types of a certain level.
 
-\subsubsection{Inversion}\label{mltt-inv}
-
-% TODO
-
 \subsubsection{Equality}\label{mltt-eq}
 
 Equality deserves a specific discussion. Like with the lambda-pi calculus, there
@@ -293,7 +289,7 @@ content, meaning one can define a computational rule for it~:
 Another axiom that is very useful is that of functional extensionality. It comes
 from the fact that since functions have little structure to be exploited,
 proving equality between functions beyond syntactic equality is often
-impossible. Intuitively, two functions should be equal if they are pointwise
+impossible. Intuitively, two functions should be equal if they are point wise
 equal, as this is what set theory has gotten us used to. Well functional
 extensionality is an axiom that says exactly that~:
 
@@ -304,6 +300,125 @@ extensionality is an axiom that says exactly that~:
     \infer3{\Gamma\vdash f =_{\Pi(x : A), B} g}
 \end{prooftree}\end{center}
 
+\subsubsection{Heterogeneous equality}\label{heq}
+
+We have seen MLTT has definitional and propositional equality. There is one more
+kind equality that we want to consider, that can be defined from the previous.
+Assuming we have $\Gamma\vdash a : A$, $\Gamma\vdash b : B$ and $\Gamma\vdash p : A =_{U_{s}} B$, we may want
+to ask whether $a$ and $b$ are equal, which does not make sense since they are
+of definitionally different types, but since they are propositionally the same
+there should be a way of formulating that. One way would be to ask whether~:
+
+\[ a \heq{A}{B} b := (A,a) =_{\Sigma(T : U_{s}), T} (B,b) \]
+
+This is called \emph{heterogeneous} equality, since it allows to compare terms
+of different types. While this definition makes a lot of sense, it is not the
+easiest one to work with. Thankfully, there is an equivalent definition~:
+
+\[ a \heq{A}{B} b \iff \Sigma(p : A =_{U_{s}} B), p^{*}\ a =_{B} b\]
+
+This is the definition we will use. We can show it is a weakening of equality of
+terms, since $a =_{A} b$ implies that $a \heq{A}{A} b$, with
+$p \leftarrow \text{refl}_{U_{s}}(A)$. What is interesting is that with UIP, we have the
+reverse implication. Indeed, using axiom $K$, we can replace $p$ by
+$\text{refl}_{U_{s}}(A)$, and thus get
+$\text{refl}_{U_{s}}(A)^{*}\ a \equiv a =_{A} b$. Furthermore, with functional
+extensionality, we can show it is a congruence for all the constructions of the
+language.
+
+One specific property that is obvious with the second definition is that if we
+have $\Gamma\vdash p : A =_{U_{s}} B$, then we can prove $a \heq{A}{B} p^{*}\ a$.
+
 \subsection{Embedding MLTT in $\lp$}\label{mltt-shallow}
 
-% TODO describe the embedding
+Il will now describe how to embed the syntax of MLTT in LambdaPi. The first
+thing to do is to create a type for the types of MLTT. Since types in MLTT are
+ordered by universes, we will create one such type by universe level. The first
+thing is to define a type to represent the universe level, so for our flavour of
+MLTT, a type isomorphic to natural integer~:
+
+\begin{lstlisting}
+  constant symbol Sort;
+  constant symbol s0 : Sort;
+  constant symbol ssucc : Sort → Sort;
+\end{lstlisting}
+
+Then we can create the universe types, along with the interpretation function as
+described in section \ref{codes}~:
+
+\begin{lstlisting}
+  constant symbol U : Sort → TYPE;
+  symbol El (s : Sort) : U s → TYPE;
+\end{lstlisting}
+
+Finally, we can create the code types for all specific constructions of MLTT. We
+first need one for the universes themselves, since we have
+$\Gamma\vdash U_{s} : U_{s + 1}$~:
+
+\begin{lstlisting}
+  constant symbol u (s : Sort) : U (ssucc s);
+  rule El (u $s) ↪ U $s;
+\end{lstlisting}
+
+In order to encode the dependent product type, we need a \emph{maximum}
+operation on sorts, but otherwise it is done exactly as in section \ref{codes}~:
+
+\begin{lstlisting}
+  symbol smax : Sort → Sort → Sort;
+  rule smax s0 s0 ↪ s0
+  with smax (ssucc $s) s0 ↪ ssucc $s
+  with smax s0 (ssucc $s) ↪ ssucc $s
+  with smax (ssucc $s1) (ssucc $s2) ↪ ssucc (smax $s1 $s2);
+  constant symbol P (s s' : Sort) (A : U s)
+                    (B : El s A → U s') : U (smax s s');
+  rule El _ (P _ _ $A $B) ↪ Π(x : El s A), El s' (B x);
+\end{lstlisting}
+
+We can do something similar for the dependent sum type, except that since it
+does not have an equivalent in LambdaPi, we need to add the constructors and
+destructors for it~:
+
+\begin{lstlisting}
+ constant symbol S (s s' : Sort) (A : U s)
+                   (B : El s A → U s') : U (smax s s');
+ constant symbol mkS (s s' : Sort) (A : U s) (B : El s A → U s')
+                   : Π(a : El s A), El s' (B x)
+                   → El (smax s s') (S s s' A B);
+ symbol proj1 (s s' : Sort) (A : U s) (B : El s A → U s')
+            : El (smax s s') (S s s' A B) → El s A;
+ rule proj1 _ _ _ _ (mkS _ _ _ _ $x _) ↪ $x;
+ symbol proj2 (s s' : Sort) (A : U s) (B : El s A → U s')
+            : Π(p : El (smax s s') (S s s' A B)),
+                El s' (B (proj1 s s' A B p));
+ rule proj2 _ _ _ _ (mkS _ _ _ _ _ $y) ↪ $y;
+\end{lstlisting}
+
+Finally, equality is pretty straightforward~:
+
+\begin{lstlisting}
+  constant symbol eq (s : Sort) (A : U s) : El s A → El s A → U s;
+  constant symbol refl (s : Sort) (A : U s) (x : El s A)
+                : El s (eq s A x x);
+  symbol J (s s' : Sort) (A : U s) (u : El s A)
+           (P : Π(x : El s A), El s (eq s A u x) → U s')
+           (_ : El s' (P u (refl s A u)))
+           (v : El s A) (p : El s (eq s A u v)) : El s' (P v p);
+  rule J _ _ _ _ _ $w _ (refl _ _ _) ↪ $w;
+\end{lstlisting}
+
+The axioms are simply added as specific symbols of the right type. In the cas of
+$K$, a computation rule was added~:
+
+\begin{lstlisting}
+  symbol K {s : Sort} {A : U s} {a : El s A} (p : El s (eq s A a a))
+           : El s (eq s (eq s A a a) p (refl s A a));
+  rule K (refl $s $A $a) ↪ refl $s (eq $s $A $a $a) (refl $s $A $a);
+  symbol funext (s s' : Sort) (A : U s) (B : El s A → U s')
+                (f g : El (smax s s') (P s s' A B))
+                (_ : Π(x : El s A), El s' (eq s' (B x) (f x) (g x)))
+                : El (smax s s') (eq (smax s s') (P s s' A B) f g);
+\end{lstlisting}
+
+Since this is pretty standard, I did not prove the correctness of this embedding.
+In a nutshell, one would have to show by induction on the derivation results in a
+well-typed term in LambdaPi. I do not think this would cause any difficulty.

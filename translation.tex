@@ -63,5 +63,192 @@ we need a more systematic approach to it.
 
 \subsection{Organisation}
 
+\subsubsection{Translation of terms}
+
+Let's assume we have an object $d$ representing a derivation $\Gamma\vdash_{s} t : T$ (ie
+an object of type \texttt{der $\Gamma$ s t T}). We want to define a function that
+sends it to a well-typed term in MLTT. Since MLTT is shallow-embedded in
+LambdaPi (see section \ref{mltt-shallow}), a well typed term in MLTT is simply a
+LambdaPi term of the right type. But the right type for the translation is the
+translation of $T$, for some derivation of $T$. So we have some problem here,
+since to type the translation, we need the translation.
+
+Thankfully, LambdaPi allows to first define all the symbols and then the
+reduction rules in any order, so we can define a pair of mutually dependent
+symbols where the first is used to type the second. So to start we want to
+declare a translation of types. A problem we encounter is that for it to be
+recursively defined, it needs to be under any context. But then we have no way
+of defining the translation of a variable under a non empty context. So to
+workaround that, we first need to introduce a notion of \emph{translation
+context}, which is a context, but in addition to types, it stores a derivation
+for the type and an element in the translation of that type, which we can use
+when translating a variable. It can be projected to an ETT context. The
+translation context and the projection are thus defined by mutual induction with
+the translation of types~:
+
+\begin{lstlisting}
+  constant symbol TContext : TYPE;
+  symbol pC : TContext → Context;
+  symbol transT (C : TContext) {T : ETT.Term} {s : ETT.Sort} :
+    der (pC C) T (ETT.tsort s) (ETT.snext s) → U (transS s);
+\end{lstlisting}
+
+One may notice the function \texttt{transS}, which translate an ETT sort to a
+MLTT sort. This both types are isomorphic to each other and to the natural
+numbers, this translation is uninteresting. Once we have declared
+\texttt{transT}, we can declare the translation of terms. But we have a problem,
+that is we need a derivation of $\Gamma\vdash_{s+1} T : U_{s}$ to call \texttt{transT}. So
+we first need to declare an inversion lemma, which will be called
+\texttt{inv\_sort}, that extracts such a derivation from a derivation of
+$\Gamma\vdash_{s} t : T$ (and which is made much easier to type and use thanks to the
+annotation by universe level)~:
+
+\begin{lstlisting}
+  symbol inv_sort {C : Context} {s : ETT.Sort} {t T : ETT.Term}
+                : der C s t T → der C (ETT.snext s) T (ETT.tsort s);
+  symbol trans (C : TContext) {t T : ETT.Term} {s : ETT.Sort}
+               (d : der C s t T)
+             : El (transS s) (transT C (inv_sort d));
+\end{lstlisting}
+
+Actually the real types are slightly more complicated, since we do not only take
+the derivation but also a proof of the well typedness of the context, as
+discussed in section \ref{ETT-deep}. We will not include such complications
+here, since it is more of a technical detail and would make the important parts
+harder to understand.
+
+\texttt{transT} will be defined in terms of \texttt{trans}, so it will not add
+much complexity. Furthermore, there may be many correct ways to define
+\texttt{inv\_sort}, since the derivation often have redundant information, so we
+tried to always chose the one that made the implementation of \texttt{trans} the
+more straightforward possible. Most cases are pretty straightforward, a product
+being sent to a product, an abstraction to an abstraction, sometimes with some
+transports added when types differs definitionally, or when properties of the
+translation are proved but do not hold trivially. The main interesting case,
+without surprise, is the one of the conversion. That is because we need to
+define a way to \emph{translate} a proof of equivalence.
+
+\subsubsection{Translation of equivalence}\label{transEQ}
+
+As discussed in the Idea section above, we want to send a proof of equivalence
+of types to an equality of the translation of those types. Doing it this way
+does not work as is, since within the types there might be terms, so the
+translation of terms in full generality needs to be implemented. Let's go with
+that. We first need to define functions that from a proof of $\Gamma\vdash_{s} t \equiv u : T$
+extract proofs of $\Gamma\vdash_{s} t : T$ and $\Gamma\vdash_{s} u : T$~:
+
+\begin{lstlisting}
+  symbol inv_eq_t1 {C : Context} {s : ETT.Sort} {t u T : ETT.Term}
+                 : der_eq C s T t u → der C s t T;
+  symbol inv_eq_t2 {C : Context} {s : ETT.Sort} {t u T : ETT.Term}
+                 : der_eq C s T t u → der C s u T;
+\end{lstlisting}
+
+Now we could try to write directly the translation of equality, we there is a
+problem. Assuming we have \texttt{deq : der\_eq (pC C) s T t u}, the translation
+of \texttt{inv\_eq\_t1 deq} is of type \texttt{transT C (inv\_sort (inv\_eq\_t1
+deq))} while the translation of \texttt{inv\_eq\_t2 deq} is of type
+\texttt{transT C (inv\_sort (inv\_eq\_t2 deq))}. Of course we could expect those
+two type to be provably equals (and indeed they are, see next section), and add
+a transport along that equality to get two terms of the same type, it would be
+quite restrictive to force the translation of equivalence to use one specific
+equality, and would probably result in a more complicated term. Allowing the
+translation to chose the equality is exactly the same as it giving an
+heterogeneous equality of the two translations (see the second definition of
+heterogeneous equality section \ref{heq}). So we can simply do that
+(heterogeneous equality is denoted by the symbol \texttt{H})~:
+
+\begin{lstlisting}
+  symbol transEQ (C : TContext) {s : ETT.Sort} {t u T : ETT.Term}
+                 (deq : der_eq C s T t u)
+               : H (trans C (inv_eq_t1 deq))
+                   (trans C (inv_eq_t2 deq));
+\end{lstlisting}
+
+What we initially wanted was actually an equality in the case that \texttt{T} is
+a universe. We can recover it from the previous definition since the translation
+of the typing of a universe is always an universe (the translation is structured
+so this is true), and thus the above heterogeneous equality is actually between
+two terms of the same type, from which we can recover a propositional equality
+since we assume UIP.
+
+\subsubsection{Conversion}\label{conversion}
+
+Actually this is not enough to handle the conversion case. Indeed, if we have
+\texttt{d : der (pC C) s t T} and \texttt{deq : der\_eq (pC C) (snext s) T U
+(tsort s)}, we get an equality between \texttt{trans C (inv\_eq\_t1 deq)} and
+\texttt{trans C (inv\_eq\_t2 deq)}, but the translation of \texttt{d} is of type
+\texttt{transT C (inv\_sort d)}. The last one is actually the same as
+\texttt{trans C (inv\_sort d)} (the distinction is only here to type
+\texttt{trans}, but then we add a reduction rule), but not the same as
+\texttt{trans C (inv\_eq\_t1 deq)}, so we cannot transport along the translation
+of \texttt{deq}. But those two are derivation of the same type, ie they are both
+derivations of $\Gamma\vdash_{s} t : T$. Since the translation should not change the terms
+too much, we should be able to prove they are equal. And indeed we are, this is
+called the \emph{fundamental lemma} in the paper. Their approach is much more
+syntactical, so the content of the proof itself is different, but the result is
+roughly the same~:
+
+\begin{lstlisting}
+  symbol convert (C : TContext) {s : ETT.Sort} {t T : ETT.Term}
+                 (d1 d2 : der (pC C) t T s) :
+    H (trans C (inv_sort d1)) (trans C (inv_sort d2));
+\end{lstlisting}
+
+This lemma is actually too weak to be proved by induction, and some technical
+results also rely on a more powerful result. We wont go into detail of the
+generalisation here since it's pretty technical, but the idea is to allow
+\texttt{d1} and \texttt{d2} to be over different translation context for for
+which we have pointwise heterogeneous equality.
+
+In addition to be necessary to the implementation of the translation, this lemma
+is some sort of proof of correctness, or at least a sanity check~: while the
+translation depends on the derivation of the translated term, it only differs up
+to propositional equality.
+
 \subsection{Properties}
 
+Since the only objective was to have a working translation, I only proved
+results that were necessary for the translation. Yet, as with \texttt{convert}
+above, some of them can also be interpreted as correctness proofs on the
+translation. I will go over a few of them.
+
+The first one is part of a series of three about \emph{head preservation}. What
+it basically states is that the translation preserves products~:
+
+\begin{lstlisting}
+  symbol t_fun_eq (C : TContext) {s s' : ETT.Sort} {A B : ETT.Term}
+                  (dA : der (pC C) A (ETT.tsort s) (ETT.snext s))
+                  (dB : der (Push A s (pC C)) B
+                            (ETT.tsort s') (ETT.snext s'))
+                  (df : der (pC C) (ETT.tfun A B)
+                            (ETT.tsort (ETT.smax s s'))
+                            (ETT.snext (ETT.smax s s'))) :
+    El _ (eq _ (u (transS (ETT.smax s s')))
+      (transT C df)
+      (P (transS s) (transS s') (transT C dA)
+         (λ a, transT (TPush C s A dA a) dB)));
+\end{lstlisting}
+
+Due to the fact that the translation is typed, is lemma guarantees that modulo a
+transport, the translation of a product is a product of the right shape. This is
+used in the translation to translate the application, in order to be able to
+apply the translated function. Similar lemmas exists for the dependent sum and
+the equality, for the same reasons.
+
+Another way to construct term is to use De Bruijn transformation, like
+substitution or shifting. We already had to prove the substitution lemma (that
+substitution of well typed terms is a well typed term), and the shifting lemma
+(again that shifting a well-typed term is still a well typed term). In order to
+deal with typing rules that use these transformations, we had to add
+compatibility lemmas between the operation and the translation. For example,
+here the relevant lemma for translation~:
+
+\begin{lstlisting}
+  symbol t_subst_eq (C : TContext) {s s' : ETT.Sort}
+                    {A B b a : ETT.Term}
+                    (db : der (Push A s (pC C)) b B s')
+                    (da : der (pC C) a A s) :
+    H (trans (TPush C s A (inv_sort da) (trans C da)) db)
+      (trans C (substitution db da));
+\end{lstlisting}

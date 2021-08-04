@@ -83,7 +83,7 @@ Using all those definition, we can define by mutual induction a type
 \texttt{der\_context} that asserts a context is well-formed, a type
 \texttt{der} that asserts a term is well-typed, and a type \texttt{der\_eq}
 that asserts two terms are definitionally equal, all under a context
-\texttt{Context} that is an inductivaly defined list of types~:
+\texttt{Context} that is an inductively defined list of types~:
 
 \begin{lstlisting}
 inductive der_context : Context → TYPE :=
@@ -149,7 +149,7 @@ are repeated again and again, and since in the proof of the well-formation of
 the context, there is a proof that the type is well-typed, which itself will
 require in its proof proofs of the correctness of the context, the size of the
 derivation grow much more faster than linearly in the size of the context. This
-size explosion resulted in noticable slowdown and memory usage during their
+size explosion resulted in noticeable slowdown and memory usage during their
 usage definition, and thus needed to be addressed.
 
 One way to solve it is to notice that having a proof of $\Gamma\vdash t : T$
@@ -160,6 +160,19 @@ contains enough information to deduce a proof a correctness of the extended
 context. That is why the above formalisation have simples \texttt{der\_var} and
 \texttt{der\_sort}, but all the functions that use a proof of typing also take
 a proof of correctness of the context as argument.
+
+Another difference is that we annotate our derivations with the universe they
+live in. Indeed, our type \texttt{der} would better represent a type
+$\Gamma\vdash_{s} t : T$ where $\Gamma\vdash T : U_{s}$. The reason is exactly this~: if we have
+$\Gamma\vdash t : T$, we can prove that $\Gamma\vdash T : U_{s}$ for some $s$. But programmatically,
+the fact that it is for some $s$ makes it a lot harder to manipulate, since then
+you need some additional lemmas to know more precisely what $s$ is depending on
+the type.  With our formalism, from $\Gamma\vdash_{s} t : T$, we can prove
+$\Gamma\vdash_{s+1} T : U_{s}$, so all the information is already present in the type.
+This makes it a lot easier to use in practice. The same way, \texttt{der\_eq}
+remember both the type of the two parts of the equivalence, and the sort of the
+type. So instead of representing only a proof of $\Gamma\vdash t \equiv u$, it is more
+$\Gamma\vdash_{s} t \equiv u : T$, where $\Gamma\vdash t : T$, $\Gamma\vdash u : T$ and $\Gamma\vdash T : U_{s}$.
 
 \subsection{Properties}\label{ETT-prop}
 
